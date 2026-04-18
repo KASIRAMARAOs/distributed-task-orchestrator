@@ -1,0 +1,184 @@
+version: '3.9'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: orchestrator_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: taskdb
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - orchestrator_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    container_name: orchestrator_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - orchestrator_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: orchestrator_api
+    restart: unless-stopped
+    env_file: .env.example
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/taskdb
+      DATABASE_SYNC_URL: postgresql://postgres:postgres@db:5432/taskdb
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - orchestrator_net
+    ports:
+      - "8000:8000"
+
+  worker_default:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: orchestrator_worker_default
+    restart: unless-stopped
+    env_file: .env.example
+    environment:
+      DATABASE_SYNC_URL: postgresql://postgres:postgres@db:5432/taskdb
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    command: >
+      celery -A app.core.celery_app.celery_app worker
+      --loglevel=info
+      --concurrency=4
+      --queues=default
+      --hostname=worker-default@%h
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - orchestrator_net
+
+  worker_priority:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: orchestrator_worker_priority
+    restart: unless-stopped
+    env_file: .env.example
+    environment:
+      DATABASE_SYNC_URL: postgresql://postgres:postgres@db:5432/taskdb
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    command: >
+      celery -A app.core.celery_app.celery_app worker
+      --loglevel=info
+      --concurrency=2
+      --queues=critical,high_priority
+      --hostname=worker-priority@%h
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - orchestrator_net
+
+  worker_low:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: orchestrator_worker_low
+    restart: unless-stopped
+    env_file: .env.example
+    environment:
+      DATABASE_SYNC_URL: postgresql://postgres:postgres@db:5432/taskdb
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    command: >
+      celery -A app.core.celery_app.celery_app worker
+      --loglevel=info
+      --concurrency=2
+      --queues=low_priority
+      --hostname=worker-low@%h
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - orchestrator_net
+
+  beat:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: orchestrator_beat
+    restart: unless-stopped
+    env_file: .env.example
+    environment:
+      DATABASE_SYNC_URL: postgresql://postgres:postgres@db:5432/taskdb
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    command: >
+      celery -A app.core.celery_app.celery_app beat
+      --loglevel=info
+    depends_on:
+      - redis
+    networks:
+      - orchestrator_net
+
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: orchestrator_flower
+    restart: unless-stopped
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    command: >
+      celery -A app.core.celery_app.celery_app flower
+      --port=5555
+      --basic_auth=admin:admin
+    depends_on:
+      - redis
+    networks:
+      - orchestrator_net
+    ports:
+      - "5555:5555"
+
+volumes:
+  pg_data:
+  redis_data:
+
+networks:
+  orchestrator_net:
+    driver: bridge
