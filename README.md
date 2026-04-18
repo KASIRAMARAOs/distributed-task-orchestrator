@@ -1,177 +1,270 @@
-# TaskOrchestrator — Distributed Task & Workflow Orchestrator
+# ⚙️ Distributed Task & Workflow Orchestrator
 
-A production-grade distributed task queue system demonstrating async processing, retry logic, priority queues, workflow orchestration, and real-time monitoring.
+A production-grade distributed task processing system that enables asynchronous execution, priority-based scheduling, workflow orchestration, and real-time monitoring using Celery, Redis, and FastAPI.
 
-## Features
+---
 
-- **Distributed task execution** via Celery workers
-- **4 priority queues**: critical → high → normal → low
-- **Automatic retry** with exponential backoff
-- **Workflow support** — group related tasks under a workflow
-- **Real-time progress tracking** — 0–100% per task
-- **Persistent task history** in PostgreSQL
-- **Flower dashboard** for live worker/queue monitoring
-- **Celery Beat** for periodic/scheduled tasks
-- **Structured logging** with structlog
-- **Full REST API** with OpenAPI docs
+## 💡 Key Highlights
 
-## Tech Stack
+* ⚡ Asynchronous distributed task execution using Celery
+* 🎯 Priority-based scheduling with multiple queues (critical → low)
+* 🔄 Automatic retry with exponential backoff for fault tolerance
+* 📊 Real-time task progress tracking (0–100%)
+* 🧩 Workflow orchestration for grouped task execution
+* 📡 Scalable architecture with multiple workers
+* 🏗 Built as a production-style distributed backend system
 
-| Component | Technology |
-|---|---|
-| API | Python 3.11, FastAPI, Uvicorn |
-| Task Queue | Celery 5 |
-| Broker | Redis |
-| Result Backend | Redis |
-| Database | PostgreSQL 15 + SQLAlchemy 2 (async) |
-| Monitoring | Flower |
-| Containerization | Docker, Docker Compose |
+---
 
-## Architecture
+## 🚀 Features
 
-```
-                    ┌─────────────┐
-   HTTP Request ───►│  FastAPI    │
-                    │   API       │──── PostgreSQL (task state)
-                    └──────┬──────┘
-                           │ submit
-                           ▼
-                    ┌─────────────┐
-                    │    Redis    │◄─── Celery Beat (scheduled)
-                    │  (Broker)   │
-                    └──────┬──────┘
-               ┌───────────┼───────────┐
-               ▼           ▼           ▼
-        ┌────────────┐ ┌────────┐ ┌──────────┐
-        │  Worker    │ │Worker  │ │ Worker   │
-        │ (critical/ │ │(default│ │(low      │
-        │  high)     │ │ queue) │ │ priority)│
-        └────────────┘ └────────┘ └──────────┘
-               │           │           │
-               └───────────┼───────────┘
-                           │ results
-                           ▼
-                    ┌─────────────┐
-                    │    Redis    │
-                    │  (Results)  │
-                    └─────────────┘
+* Distributed task execution across multiple workers
+* 4 priority queues: critical, high, normal, low
+* Retry mechanism with exponential backoff
+* Workflow support (task grouping & chaining)
+* Real-time progress tracking
+* Persistent task storage in PostgreSQL
+* Flower dashboard for monitoring
+* Scheduled tasks using Celery Beat
+* Structured logging
+* REST API with OpenAPI documentation
+
+---
+
+## 🛠 Tech Stack
+
+| Layer          | Technology                    |
+| -------------- | ----------------------------- |
+| Backend API    | FastAPI, Uvicorn              |
+| Task Queue     | Celery                        |
+| Broker         | Redis                         |
+| Result Backend | Redis                         |
+| Database       | PostgreSQL (SQLAlchemy async) |
+| Monitoring     | Flower                        |
+| DevOps         | Docker, Docker Compose        |
+
+---
+
+## 🧠 System Architecture
+
+```id="arch-task"
+Client → FastAPI API → Redis Broker → Celery Workers → Redis (Results) → PostgreSQL
 ```
 
-## Task Types
+---
 
-| Task Type | Queue | Description |
-|---|---|---|
-| `generate_report` | default | Generates data reports |
-| `send_email` | default | Sends emails via SMTP |
-| `process_data` | default | Data pipeline processing |
-| `web_scrape` | low_priority | Web scraping jobs |
-| `critical_payment` | critical | Payment processing |
-| `generic_task` | default | Fallback for unknown types |
+## 🔄 Task Execution Pipeline
 
-## Setup
+```id="pipeline-task"
+Client Request
+     │
+     ▼
+FastAPI API (Validate + Create Task)
+     │
+     ▼
+Push Task → Redis Broker
+     │
+     ▼
+Celery Worker Picks Task
+     │
+     ▼
+Execute Task Logic
+     │
+     ▼
+Store Result → Redis + PostgreSQL
+     │
+     ▼
+Client Polls Status / Result
+```
 
-### Quick Start (Docker)
+---
 
-```bash
-git clone <repo>
-cd project2-task-orchestrator
+## 🔄 Priority Queue Processing
+
+```id="pipeline-priority"
+Tasks → Queue Selection
+         │
+         ├── Critical Queue
+         ├── High Priority Queue
+         ├── Normal Queue
+         └── Low Priority Queue
+                │
+                ▼
+        Dedicated Workers Process Tasks
+```
+
+---
+
+## 🔄 Workflow Orchestration Pipeline
+
+```id="pipeline-workflow"
+Workflow Request
+     │
+     ▼
+Create Workflow (Group Tasks)
+     │
+     ▼
+Submit Tasks to Queue
+     │
+     ▼
+Execute Tasks (Sequential / Parallel)
+     │
+     ▼
+Aggregate Results
+     │
+     ▼
+Return Workflow Status
+```
+
+---
+
+## 🔄 Retry & Fault Tolerance
+
+```id="pipeline-retry"
+Task Execution
+     │
+     ▼
+Failure Detected
+     │
+     ▼
+Retry with Backoff
+     │
+     ▼
+Max Retries Reached?
+     │        │
+     │ Yes    │ No
+     ▼        ▼
+Mark Failed  Retry Again
+```
+
+---
+
+## 🧠 Core System Design Concepts
+
+### ⚡ Asynchronous Processing
+
+* Tasks executed in background
+* API remains non-blocking
+* Improves system responsiveness
+
+---
+
+### 🎯 Priority Scheduling
+
+* Critical tasks processed first
+* Prevents starvation of high-priority jobs
+* Ensures SLA compliance
+
+---
+
+### 🔄 Fault Tolerance
+
+* Automatic retries
+* Backoff strategy prevents overload
+* Persistent task state ensures recovery
+
+---
+
+### 📈 Horizontal Scaling
+
+* Add more workers to increase throughput
+* Stateless API allows scaling
+* Redis enables distributed coordination
+
+---
+
+## ⚙️ Setup Instructions
+
+### 🔧 Prerequisites
+
+* Docker & Docker Compose
+
+---
+
+### 🚀 Quick Start
+
+```bash id="setup-task1"
+git clone https://github.com/KASIRAMARAOs/distributed-task-orchestrator.git
+cd distributed-task-orchestrator
 
 cp .env.example .env
 
 docker-compose up --build
-
-# API docs: http://localhost:8000/docs
-# Flower:   http://localhost:5555  (admin:admin)
 ```
 
-### Local Development
+👉 API Docs: http://localhost:8000/docs
+👉 Flower: http://localhost:5555
 
-```bash
-# Start infra
+---
+
+### 💻 Local Development
+
+```bash id="setup-task2"
 docker-compose up db redis -d
 
-# Create virtualenv
-python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
-# Copy env
-cp .env.example .env
-# Edit DATABASE_URL and REDIS_URL to point to localhost
+uvicorn app.main:app --reload
 
-# Run API
-uvicorn app.main:app --reload --port 8000
+celery -A app.core.celery_app worker \
+  --loglevel=info \
+  --queues=default,high_priority,low_priority,critical
 
-# Run worker (new terminal)
-celery -A app.core.celery_app.celery_app worker --loglevel=info --queues=default,high_priority,low_priority,critical
-
-# Run Flower (new terminal)
-celery -A app.core.celery_app.celery_app flower --port=5555
+celery -A app.core.celery_app flower --port=5555
 ```
 
-## API Reference
+---
 
+## 🔌 API Endpoints
+
+```id="api-task"
+POST   /api/v1/tasks
+GET    /api/v1/tasks
+GET    /api/v1/tasks/{id}
+GET    /api/v1/tasks/{id}/status
+GET    /api/v1/tasks/{id}/result
+POST   /api/v1/tasks/{id}/cancel
+POST   /api/v1/tasks/{id}/retry
+GET    /api/v1/tasks/{id}/logs
+
+POST   /api/v1/workflows
+
+GET    /api/v1/metrics
+GET    /api/v1/health
 ```
-POST   /api/v1/tasks                    Submit a task
-GET    /api/v1/tasks                    List tasks (filterable)
-GET    /api/v1/tasks/{id}               Get task details
-GET    /api/v1/tasks/{id}/status        Get task status (lightweight poll)
-GET    /api/v1/tasks/{id}/result        Get task result
-POST   /api/v1/tasks/{id}/cancel        Cancel task
-POST   /api/v1/tasks/{id}/retry         Retry failed task
-GET    /api/v1/tasks/{id}/logs          Get task execution logs
-DELETE /api/v1/tasks/{id}               Soft-delete task
 
-POST   /api/v1/workflows                Create workflow (grouped tasks)
+---
 
-GET    /api/v1/metrics                  Queue metrics
-GET    /api/v1/health                   Health check
-```
+## 📊 Example
 
-### Submit Task Example
+### Submit Task
 
-```bash
+```bash id="example-task"
 curl -X POST http://localhost:8000/api/v1/tasks \
   -H "Content-Type: application/json" \
-  -d '{
-    "name": "Monthly Report Q4",
-    "task_type": "generate_report",
-    "payload": {"report_id": "q4-2024", "report_type": "monthly"},
-    "priority": "high",
-    "max_retries": 3,
-    "tags": ["reports", "q4"]
-  }'
+  -d '{"task_type": "generate_report"}'
 ```
 
-### Poll Task Status
+---
 
-```bash
-curl http://localhost:8000/api/v1/tasks/{task_id}/status
-# Returns: { "status": "running", "progress": 60, "progress_message": "Aggregating results" }
-```
+## 📈 Scalability Considerations
 
-### Create Workflow
+* Multiple workers process tasks in parallel
+* Redis handles distributed task queue
+* PostgreSQL ensures persistence
+* Can scale to high throughput systems
 
-```bash
-curl -X POST http://localhost:8000/api/v1/workflows \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Daily ETL Pipeline",
-    "tasks": [
-      {"name": "Fetch data", "task_type": "process_data", "payload": {"dataset": "users"}},
-      {"name": "Send summary", "task_type": "send_email", "payload": {"to": "team@co.com"}}
-    ]
-  }'
-```
+---
 
-## Environment Variables
+## 📌 Future Improvements
 
-| Variable | Description |
-|---|---|
-| `DATABASE_URL` | Async PostgreSQL DSN |
-| `DATABASE_SYNC_URL` | Sync PostgreSQL DSN (for Celery) |
-| `CELERY_BROKER_URL` | Redis broker URL |
-| `CELERY_RESULT_BACKEND` | Redis result backend URL |
-| `CELERY_MAX_RETRIES` | Max retry attempts |
-| `CELERY_RETRY_BACKOFF` | Seconds between retries |
-| `TASK_SOFT_TIME_LIMIT` | Soft timeout (seconds) |
-| `TASK_TIME_LIMIT` | Hard timeout (seconds) |
+* DAG-based workflow engine
+* Distributed tracing (OpenTelemetry)
+* Kafka-based event streaming
+* Auto-scaling workers
+
+---
+
+## 👨‍💻 Author
+
+**Kasi Sripalasetty**
